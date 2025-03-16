@@ -1,0 +1,1 @@
+# vite_critical
