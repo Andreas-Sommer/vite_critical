@@ -1,0 +1,26 @@
+{
+	"name": "belsignum/vite-critical",
+	"description": "Critical CSS extractor and provider + html minification",
+	"type": "typo3-cms-extension",
+	"license": "GPL-2.0-or-later",
+	"autoload": {
+		"psr-4": {
+			"Belsignum\\ViteCritical\\": "Classes/"
+		}
+	},
+	"authors": [
+		{
+			"name": "Andreas Sommer",
+			"email": "sommer@belsignum.com"
+		}
+	],
+	"require": {
+		"typo3/cms-core": "^12.4",
+		"praetorius/vite-asset-collector": "^1.14"
+	},
+	"extra": {
+		"typo3/cms": {
+			"extension-key": "vite_critical"
+		}
+	}
+}

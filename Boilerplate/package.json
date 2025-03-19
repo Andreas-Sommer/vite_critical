@@ -1,0 +1,23 @@
+{
+  "name": "vite-critical",
+  "version": "1.0.0",
+  "main": "generate-critical.js",
+  "type": "module",
+  "scripts": {
+    "postbuild": "node generate-critical.js"
+  },
+  "devDependencies": {
+    "@popperjs/core": "^2.11.8",
+    "@rollup/plugin-terser": "^0.4.4",
+    "critical": "^7.2.1",
+    "cssnano": "^7.0.6",
+    "dotenv": "^16.4.7",
+    "node-fetch": "^3.3.2",
+    "penthouse": "^2.3.3",
+    "postcss-safe-parser": "^7.0.1",
+    "puppeteer": "^24.3.0",
+    "puppeteer-core": "^24.3.0",
+    "sass": "1.77.0",
+    "selenium-webdriver": "^4.29.0"
+  }
+}

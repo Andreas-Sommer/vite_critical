@@ -1,0 +1,68 @@
+# Environment setting (Development, Production)
+ENV: "Development"
+
+# Name of the site (e.g., bob, caravan-one, petool)
+SITENAME: "bob"
+
+# Name of the template (e.g., default, custom)
+TEMPLATE: "default"
+
+# Path to the output folder for Vite assets
+VITE_OUTPUT_PATH: "public/assets/"
+
+# Viewport size for Critical CSS generation
+WIDTH: 412
+HEIGHT: 823
+
+# Rendering wait time in milliseconds
+RENDER_WAIT_TIME: 300
+
+# Timeout for Puppeteer in milliseconds
+TIMEOUT: 30000
+
+# Whether to block JavaScript requests (true/false)
+BLOCK_JS_REQUESTS: true
+
+# Whether to remove CSS comments (true/false)
+STRIP_COMMENTS: true
+
+# Maximum length for embedded Base64 URLs
+MAX_BASE64_LENGTH: 1000
+
+# Force font-face font-display:swap
+FORCE_FONT_DISPLAY: true
+
+# Files or CSS selectors that should always be included in the Critical CSS
+FORCE_INCLUDE:
+  - ".col-"
+  - ".d-none"
+  - ".d-sm-block"
+
+# List of CSS properties to be removed from the Critical CSS
+PROPERTIES_REMOVE:
+  - "width"
+  - "max-width"
+  - "min-width"
+  - "display"
+  - "-bs-blue"
+  - "-bs-indigo"
+  - "-bs-purple"
+  - "-bs-pink"
+  - "-bs-red"
+  - "-bs-orange"
+  - "-bs-yellow"
+  - "-bs-green"
+  - "-bs-teal"
+  - "-bs-cyan"
+
+# List of CSS selectors to be removed from the Critical CSS
+SELECTORS_REMOVE:
+  - ".mb-2"
+
+# Arguments for Puppeteer (for Headless Chrome in DDEV)
+PUPPETEER_ARGS:
+  - "--no-sandbox"
+  - "--disable-gpu"
+  - "--disable-dev-shm-usage"
+  - "--ignore-certificate-errors"
+  - "--allow-insecure-localhost"
