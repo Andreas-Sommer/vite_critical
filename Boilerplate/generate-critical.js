@@ -254,10 +254,19 @@ class CriticalCssGenerator {
     console.log("✅ Critical CSS minified!");
 
     this._saveCriticalCss(criticalCss);
-    await this._generateDeferredCss(criticalCss);
+    //await this._generateDeferredCss(criticalCss);
 
     this.manifestEntry.critical = path.join(this.relativeViteOutputPath, `${this.sitename}_${this.template}-critical-${this.fileHash}.css`);
-    this.manifestEntry.deferred = path.join(this.relativeViteOutputPath, `${this.sitename}_${this.template}-deferred-${this.fileHash}.css`);
+    //this.manifestEntry.deferred = path.join(this.relativeViteOutputPath, `${this.sitename}_${this.template}-deferred-${this.fileHash}.css`);
+
+    if (
+      Array.isArray(this.manifestEntry.imports) &&
+      this.manifestEntry.imports.includes(this.manifestEntry.src)
+    ) {
+      console.info(`ℹ️ Removing self-import from manifest for: ${this.manifestEntry.name}`);
+      this.manifestEntry.imports = this.manifestEntry.imports.filter(i => i !== this.manifestEntry.src);
+    }
+
     fs.writeFileSync(this.manifestPath, JSON.stringify(this.manifest, null, 2));
 
     console.log("✅ manifest.json updated successfully!");
