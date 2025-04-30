@@ -36,7 +36,12 @@ class ViteService extends \Praetorius\ViteAssetCollector\Service\ViteService
         if ($this->isFrontend())
         {
             $this->request = $GLOBALS['TYPO3_REQUEST'];
-            $this->configuration = $this->request->getAttribute('site')->getConfiguration();
+            $site = $this->request->getAttribute('site');
+            if($site)
+            {
+                $this->configuration = $site->getConfiguration();
+            }
+
         }
     }
 
