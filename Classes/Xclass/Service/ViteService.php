@@ -111,41 +111,27 @@ class ViteService extends \Praetorius\ViteAssetCollector\Service\ViteService
                 $this->assetCollector->addInlineStyleSheet(
                     "viteCritical:critical-{$entry}",
                     file_get_contents($this->prepareAssetPath($outputDir . $entryPoint->critical, $assetOptions['external'])),
-                    ['type' => 'text/css'],
+                    [
+                        'type' => 'text/css',
+                        'data-type' => 'critical-css'
+                    ],
                     ['priority' => true]
                 );
 
-                if(false)
+                foreach ($entryPoint->css as $file)
                 {
                     $this->assetCollector->addStyleSheet(
-                        "viteCritical:{$entry}",
-                        $this->prepareAssetPath($outputDir . $entryPoint->file, $assetOptions['external']),
+                        "vite:{$entry}:{$file}",
+                        $this->prepareAssetPath($outputDir . $file, $assetOptions['external']),
                         [
-                            'rel'    => 'preload',
-                            'as'     => 'style',
-                            'onload' => "this.onload=null;this.rel='stylesheet'"
+                            'rel' => 'preload',
+                            'as' => 'style',
+                            'onload' => "this.onload=null;this.rel='stylesheet';document.querySelector('style[data-type=\"critical-css\"]').type='stale/css';"
                         ],
                         ['priority' => false]
                     );
                     // todo: add  noscript
                 }
-                if(true) {
-                    foreach ($entryPoint->css as $file)
-                    {
-                        $this->assetCollector->addStyleSheet(
-                            "vite:{$entry}:{$file}",
-                            $this->prepareAssetPath($outputDir . $file, $assetOptions['external']),
-                            [
-                                'rel' => 'preload',
-                                'as' => 'style',
-                                'onload' => "this.onload=null;this.rel='stylesheet'"
-                            ],
-                            ['priority' => false]
-                        );
-                        // todo: add  noscript
-                    }
-                }
-
             }
             else
             {
