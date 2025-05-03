@@ -199,7 +199,7 @@ class ViteService extends \Praetorius\ViteAssetCollector\Service\ViteService
                 // this env param is only set to go into Development to simulate the production with dev vars
                 return true;
             }
-            if (Environment::getContext()->isProduction())
+            if (Environment::getContext()->isDevelopment() === false)
             {
                 return true;
             }
