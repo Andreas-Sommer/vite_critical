@@ -47,7 +47,7 @@ final class ViteManifest
             if ($recursive) {
                 $imports = array_merge(
                     $imports,
-                    $this->getImportsForEntrypoint($identifier, $recursive)
+                    $this->getImportsForEntrypoint($identifier, false)
                 );
             }
         }
