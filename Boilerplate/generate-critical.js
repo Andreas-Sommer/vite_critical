@@ -7,15 +7,13 @@ import minimist from "minimist";
 import postcss from "postcss";
 import postcssSafeParser from "postcss-safe-parser";
 import cssnano from "cssnano";
+import { execSync } from "child_process";
 
 class CriticalCssGenerator {
   constructor() {
     this._loadConfig();
     this._loadEnv();
     this._loadManifest();
-    this._loadSiteConfig();
-    this._getManifestEntry();
-    this._getHashFromManifestEntry();
   }
 
   _loadConfig() {
@@ -24,9 +22,7 @@ class CriticalCssGenerator {
       const YAML_CONFIG_PATH = "critical.yaml";
       if (fs.existsSync(YAML_CONFIG_PATH)) {
         this.config = yaml.load(fs.readFileSync(YAML_CONFIG_PATH, "utf8"));
-        console.log(`✅ Loaded configuration from ${YAML_CONFIG_PATH}`);
-
-        console.log(this.config);
+        console.log(`✅ Loaded global defaults from ${YAML_CONFIG_PATH}`);
       } else {
         console.error(`❌ Error: ${YAML_CONFIG_PATH} not found!`);
         process.exit(1);
@@ -37,31 +33,13 @@ class CriticalCssGenerator {
     }
   }
 
-  /**
-   * Load environment variables from critical.env
-   */
   _loadEnv() {
     const args = minimist(process.argv.slice(2));
-    this.sitename = args.site || this.config.SITENAME;
-    this.template = args.template || this.config.TEMPLATE;
     this.env = args.env || this.config.ENV || "Development";
-
     this.absoluteViteOutputPath = args.outputpath || this.config.VITE_OUTPUT_PATH || "public/assets/";
     this.relativeViteOutputPath = this.absoluteViteOutputPath.replace(/^public\//, "");
-
-    if (!this.sitename || !this.template) {
-      console.error("❌ `SITENAME` and `TEMPLATE` are required! Set them via CLI or `critical.yaml`.");
-      process.exit(1);
-    }
-    console.log(`🛠️  Using SITENAME: ${this.sitename}, TEMPLATE: ${this.template}, ENV: ${this.env}`);
-    if (!args.env && !this.config.ENV) {
-      console.warn("⚠️ No `ENV` specified! Defaulting to `Development`.");
-    }
   }
 
-  /**
-   * Load Vite manifest.json
-   */
   _loadManifest() {
     this.manifestPath = path.join(this.absoluteViteOutputPath, ".vite/manifest.json");
     if (!fs.existsSync(this.manifestPath)) {
@@ -73,388 +51,248 @@ class CriticalCssGenerator {
     }
   }
 
-  /**
-   * Load site-specific config.yaml
-   */
-  _loadSiteConfig() {
-    const configPath = path.join("config", 'sites', this.sitename, "config.yaml");
-    if (!fs.existsSync(configPath)) {
-      console.warn(`⚠️ No config.yaml found for site: ${this.sitename}`);
-      process.exit(1);
-    } else {
-      console.log(`✅ Loaded Site Config  from ${configPath}`);
-    }
-
-    try {
-      this.siteConfig = yaml.load(fs.readFileSync(configPath, "utf8"));
-      const baseVariant = this.siteConfig.baseVariants?.find(v => v.condition.includes(this.env));
-      this.baseUrl = baseVariant?.base || this.siteConfig.base;
-
-      console.log(`🌍 Base URL: ${this.baseUrl}`);
-
-      if (!this.siteConfig.viteCritical?.criticalCss?.enable) {
-        console.warn("⚠️ Critical CSS is disabled in the site configuration!");
-        process.exit(1);
-      }
-    } catch (error) {
-      console.error(`❌ Error loading site configuration (${configPath}):`, error);
-      process.exit(1);
-    }
-  }
-
-  _getManifestEntry() {
-    this.manifestEntry = Object.values(this.manifest).find(item => item.name === `${this.sitename}_${this.template}`);
-    if (!this.manifestEntry) {
-      console.error(`❌ No matching entry found for ${this.sitename}_${this.template} in the Vite manifest.`);
-      process.exit(1);
-    }
-  }
-
-  _getHashFromManifestEntry() {
-    // Extract Hash from the filename (assuming format: "assets/SITENAME_TEMPLATE-CtisGtDw.css|js")
-    const hashMatch = this.manifestEntry.file ? this.manifestEntry.file.match(/-(\w+)\.(css|js)$/) : null;
-    this.fileHash = hashMatch ? hashMatch[1] : null;
-
-    if (this.fileHash) {
-      console.log(`✅ Extracted file hash: ${this.fileHash}`);
-    } else {
-      console.warn(`⚠️ No hash found for ${this.sitename}_${this.template}`);
-    }
-  }
-
-  /**
-   * Get the correct CSS files and extract hash for the given template from manifest.json
-   */
-  _getCssFileFromManifest() {
-    try {
-      // Extract CSS files
-      let cssFiles = this.manifestEntry.css || [];
-      if (this.manifestEntry.file && this.manifestEntry.file.endsWith(".css")) {
-        cssFiles.push(this.manifestEntry.file);
-      }
-
-      return cssFiles.map(file => path.join(this.absoluteViteOutputPath, file));
-    } catch (error) {
-      console.error("❌ Error loading Vite manifest:", error);
-      process.exit(1);
-    }
-  }
-
-  _fixAssetPathsInCriticalCss(criticalCss) {
-    if (!this.manifestEntry || !this.manifestEntry.assets) {
-      console.info("ℹ️ Keine Assets im Manifest gefunden. Pfade werden nicht angepasst.");
-      return criticalCss;
-    }
-
-    return criticalCss.replace(/url\((\.\/)?([^)"']+)\)/g, (match, dotSlash, assetFile) => {
-      const assetPath = this.manifestEntry.assets.find(asset => asset.endsWith(assetFile));
-
-      if (assetPath) {
-        // Korrigiere doppelte Slashes und stelle sicher, dass es mit / beginnt
-        let fixedPath = `${this.relativeViteOutputPath}/${assetPath}`.replace(/\/+/g, "/");
-
-        return `url(${fixedPath})`;
-      }
-
-      return match; // Falls das Asset nicht gefunden wird, bleibt es unverändert
-    });
-  }
-
-  /**
-   * Start Puppeteer and extract Critical CSS
-   */
-  /**
-   * Generate Critical CSS using Penthouse and Puppeteer
-   */
-  async generateCriticalCss() {
-    console.log("🚀 Starting Puppeteer...");
-
-    // Load Puppeteer arguments from config
-    const browserArgs = this.config.PUPPETEER_ARGS || [
-      "--no-sandbox",
-      "--disable-gpu",
-      "--disable-dev-shm-usage",
-      "--ignore-certificate-errors",
-      "--allow-insecure-localhost"
-    ];
-
-    // Start Puppeteer
-    const browser = await puppeteer.launch({
-      headless: "new",
-      executablePath: "/usr/bin/chromium",
-      args: browserArgs
-    });
-
-    const page = await browser.newPage();
-    console.log(`🌐 Loading page: ${this.baseUrl}`);
-    await page.goto(this.baseUrl, { waitUntil: "networkidle2" });
-
-    console.log("✅ Page loaded, retrieving CSS...");
-
-    // Retrieve all CSS files from manifest
-    const cssFiles = this._getCssFileFromManifest();
-    if (!cssFiles || cssFiles.length === 0) {
-      console.error("❌ No CSS files found for template!");
-      await browser.close();
+  async run() {
+    const sitesPath = path.join("config", "sites");
+    if (!fs.existsSync(sitesPath)) {
+      console.error(`❌ Sites directory not found: ${sitesPath}`);
       return;
     }
 
-    // Inject all CSS files into the page
-    for (const cssFile of cssFiles) {
-      console.log(`🔗 Injecting CSS: ${cssFile}`);
-      const cssContent = fs.readFileSync(cssFile, "utf-8");
-      await page.addStyleTag({ content: cssContent });
-    }
-
-    console.log("🚀 Extracting Critical CSS...");
-
-    // Extract Critical CSS using Penthouse
-    let options = {
-      url: this.baseUrl,
-      puppeteer: {
-        getBrowser: async () => {
-          console.log("🚀 Starting Puppeteer for Penthouse...");
-          return await puppeteer.launch({
-            executablePath: "/usr/bin/chromium",
-            headless: "new",
-            args: browserArgs
-          });
+    const sites = fs.readdirSync(sitesPath).filter(f => {
+        try {
+            return fs.statSync(path.join(sitesPath, f)).isDirectory();
+        } catch (e) {
+            return false;
         }
-      },
-      width: parseInt(this.config.WIDTH,10),
-      height: parseInt(this.config.HEIGHT, 10),
-      forceInclude: this.config.FORCE_INCLUDE || [],
-      blockJSRequests: this.config.BLOCK_JS_REQUESTS !== false,
-      renderWaitTime: parseInt(this.config.RENDER_WAIT_TIME || "300", 10),
-      timeout: parseInt(this.config.TIMEOUT || "30000", 10),
-      stripComments: this.config.STRIP_COMMENTS !== false,
-      maxEmbeddedBase64Length: parseInt(this.config.MAX_BASE64_LENGTH || "1000", 10),
-      propertiesToRemove: this.config.PROPERTIES_REMOVE || []
-    }
-    options.cssString = cssFiles.map(file => fs.readFileSync(file, "utf-8")).join("\n");
+    });
 
-    let criticalCss = await penthouse(options);
-    criticalCss = this._removeUnwantedCss(criticalCss);
-    console.log("✅ Critical CSS extracted!");
-
-    if (this.config.FORCE_FONT_DISPLAY !== false) {
-      criticalCss = this._forceFontDisplay(criticalCss);
-      console.log(`✅ Force font-display ${this.config.FORCE_FONT_DISPLAY}!`);
+    for (const siteIdentifier of sites) {
+      await this._processSite(siteIdentifier);
     }
 
-    criticalCss = this._fixAssetPathsInCriticalCss(criticalCss);
-
-    // minify critical css
-    const minifiedCriticalCss = await postcss([
-      cssnano({
-        preset: "default",
-      })
-    ]).process(criticalCss, { parser: postcssSafeParser });
-    criticalCss = minifiedCriticalCss.css;
-    console.log("✅ Critical CSS minified!");
-
-    this._saveCriticalCss(criticalCss);
-    //await this._generateDeferredCss(criticalCss);
-
-    this.manifestEntry.critical = path.join(this.relativeViteOutputPath, `${this.sitename}_${this.template}-critical-${this.fileHash}.css`);
-    //this.manifestEntry.deferred = path.join(this.relativeViteOutputPath, `${this.sitename}_${this.template}-deferred-${this.fileHash}.css`);
-
-    if (
-      Array.isArray(this.manifestEntry.imports) &&
-      this.manifestEntry.imports.includes(this.manifestEntry.src)
-    ) {
-      console.info(`ℹ️ Removing self-import from manifest for: ${this.manifestEntry.name}`);
-      this.manifestEntry.imports = this.manifestEntry.imports.filter(i => i !== this.manifestEntry.src);
-    }
-
+    // Save manifest once at the end
     fs.writeFileSync(this.manifestPath, JSON.stringify(this.manifest, null, 2));
-
-    console.log("✅ manifest.json updated successfully!");
-
-    await browser.close();
+    console.log("\n✅ manifest.json updated successfully!");
   }
 
-  /**
-   * Remove unwanted CSS properties and selectors safely while maintaining valid CSS syntax.
-   */
-  _removeUnwantedCss(cssContent) {
-    console.log("🔍 Removing unwanted CSS properties, selectors, and !important safely...");
+  async _processSite(siteIdentifier) {
+    const configPath = path.join("config", "sites", siteIdentifier, "config.yaml");
+    if (!fs.existsSync(configPath)) return;
 
     try {
-      const processedCss = postcss([
-        (root) => {
-          // ✅ Entferne definierte Properties
-          if (this.config.PROPERTIES_REMOVE && Array.isArray(this.config.PROPERTIES_REMOVE)) {
-            console.log("🔍 Properties to remove:", this.config.PROPERTIES_REMOVE);
-            root.walkDecls(decl => {
-              if (this.config.PROPERTIES_REMOVE.includes(decl.prop)) {
-                console.log(`🗑 Removing property: ${decl.prop} in selector: ${decl.parent.selector}`);
-                decl.remove();
-              }
-            });
-          }
+      const siteConfig = yaml.load(fs.readFileSync(configPath, "utf8"));
+      const viteCritical = siteConfig.viteCritical?.criticalCss;
 
-          // ✅ Entferne bestimmte Selektoren
-          if (this.config.SELECTORS_REMOVE && Array.isArray(this.config.SELECTORS_REMOVE)) {
-            console.log("🔍 Selectors to remove:", this.config.SELECTORS_REMOVE);
-            root.walkRules(rule => {
-              if (this.config.SELECTORS_REMOVE.some(selector => rule.selector.includes(selector))) {
-                console.log(`🗑 Removing entire selector: ${rule.selector}`);
-                rule.remove();
-              }
-            });
-          }
-
-          // ✅ Entferne `!important` falls aktiviert
-          if (this.config.REMOVE_IMPORTANT === true) {
-            console.log("🔍 Removing !important from all CSS properties...");
-            root.walkDecls(decl => {
-              if (decl.important) {
-                console.log(`🗑 Removing !important from: ${decl.prop} in selector: ${decl.parent.selector}`);
-                decl.important = false; // Entferne `!important` direkt
-              }
-            });
-          }
-
-          // ✅ Entferne leere Selektoren
-          root.walkRules(rule => {
-            if (!rule.nodes || rule.nodes.length === 0) {
-              console.log(`🗑 Removing empty rule: ${rule.selector}`);
-              rule.remove();
-            }
-          });
-
-          // ✅ Entferne leere Media Queries
-          root.walkAtRules(atRule => {
-            if (atRule.name === "media" && (!atRule.nodes || atRule.nodes.length === 0)) {
-              console.log(`🗑 Removing empty @media query: ${atRule.params}`);
-              atRule.remove();
-            }
-          });
-
-          // ✅ Entferne leere @supports Blöcke
-          root.walkAtRules(atRule => {
-            if (atRule.name === "supports" && (!atRule.nodes || atRule.nodes.length === 0)) {
-              console.log(`🗑 Removing empty @supports block: ${atRule.params}`);
-              atRule.remove();
-            }
-          });
-        }
-      ]).process(cssContent, { parser: postcssSafeParser }).css;
-
-      return processedCss;
-    } catch (error) {
-      console.error("❌ Error processing CSS removal:", error);
-      return cssContent; // Falls ein Fehler auftritt, gib das Original zurück
-    }
-  }
-
-  _forceFontDisplay(criticalCss) {
-    return criticalCss.replace(
-      /(@font-face\s*{[^}]*?font-family:\s*[^;]+;[^}]*?src:[^}]+?)(;?\s*})/g,
-      (match, before, after) => {
-        return before.includes("font-display")
-          ? match.replace(/font-display:\s*swap(?!;)/, "font-display: swap;")
-          : before + "; font-display: swap;" + after;
+      if (!viteCritical?.enable) {
+        // console.log(`ℹ️ Site ${siteIdentifier}: Critical CSS disabled.`);
+        return;
       }
-    );
+
+      console.log(`\n--- Processing Site: ${siteIdentifier} ---`);
+
+      const baseVariant = siteConfig.baseVariants?.find(v => v.condition.includes(this.env));
+      let siteBaseUrl = (baseVariant?.base || siteConfig.base || "").replace(/\/$/, "");
+
+      if (!siteBaseUrl) {
+          console.warn(`⚠️ No base URL found for site ${siteIdentifier} in ${this.env} context.`);
+          return;
+      }
+
+      const entryPointForPid = viteCritical.entryPointForPid || {};
+      const siteSettings = viteCritical.settings || {};
+
+      // Merged settings for this site
+      const activeSettings = {
+        width: siteSettings.width || this.config.WIDTH || 412,
+        height: siteSettings.height || this.config.HEIGHT || 823,
+        renderWaitTime: siteSettings.renderWaitTime || this.config.RENDER_WAIT_TIME || 300,
+        forceInclude: [...(this.config.FORCE_INCLUDE || []), ...(siteSettings.forceInclude || [])],
+        selectorsRemove: [...(this.config.SELECTORS_REMOVE || []), ...(siteSettings.selectorsRemove || [])],
+        propertiesRemove: [...(this.config.PROPERTIES_REMOVE || []), ...(siteSettings.propertiesRemove || [])],
+        blockJSRequests: siteSettings.blockJSRequests ?? this.config.BLOCK_JS_REQUESTS ?? true,
+        timeout: siteSettings.timeout || this.config.TIMEOUT || 30000,
+      };
+
+      for (const [template, pidsRaw] of Object.entries(entryPointForPid)) {
+        await this._processTemplate(siteIdentifier, template, pidsRaw, siteBaseUrl, activeSettings);
+      }
+
+    } catch (e) {
+      console.error(`❌ Error processing site ${siteIdentifier}:`, e.message);
+    }
   }
 
-  /**
-   * Generate Deferred CSS by removing Critical CSS from the original CSS files.
-   */
-  async _generateDeferredCss(criticalCss) {
-    console.log("🚀 Generating Deferred CSS using PostCSS...");
+  async _processTemplate(siteIdentifier, template, pidsRaw, siteBaseUrl, settings) {
+    const templateName = template.endsWith('_css') ? template : `${template}_css`;
+    const searchName = `${siteIdentifier}_${templateName}`;
+    const manifestEntry = Object.values(this.manifest).find(item => item.name === searchName);
 
-    if (!this.manifestEntry) {
-      console.error("❌ No valid manifest entry found!");
-      return null;
+    if (!manifestEntry) {
+      console.warn(`⚠️ No manifest entry found for ${searchName}. Skipping.`);
+      return;
     }
 
-    const cssFiles = [...(this.manifestEntry.css || []), this.manifestEntry.file]
-      .filter(Boolean)
-      .map(file => path.join(this.absoluteViteOutputPath, file));
+    const pids = String(pidsRaw).split(",").map(p => p.trim()).filter(Boolean);
+    if (pids.length === 0) return;
 
-    let deferredCss = "";
+    const slugs = this._resolveSlugs(siteIdentifier, pids);
+
+    for (const pid of pids) {
+      const slug = slugs[pid] || "/";
+      const url = siteBaseUrl + slug + (siteBaseUrl.includes('?') || slug.includes('?') ? '&' : '?') + 'tx_vitecritical_css[omit]=1';
+      console.log(`🚀 Generating Critical CSS for ${siteIdentifier} | Template: ${template} | PID: ${pid} | URL: ${url}`);
+
+      const criticalCss = await this._generateForUrl(url, manifestEntry, settings);
+      if (criticalCss) {
+        const hashMatch = manifestEntry.file ? manifestEntry.file.match(/-(\w+)\.(css|js)$/) : null;
+        const fileHash = hashMatch ? hashMatch[1] : "nohash";
+
+        // Use consistent naming with hyphens as requested
+        const fileName = `${siteIdentifier}-${template}-critical-pid${pid}-${fileHash}.css`.replace(/_/g, '-');
+        const outputPath = path.join(this.absoluteViteOutputPath, 'assets', fileName);
+        const publicPath = path.join(this.relativeViteOutputPath, 'assets', fileName);
+
+        fs.writeFileSync(outputPath, criticalCss);
+        console.log(`✅ Saved to ${outputPath}`);
+
+        if (!manifestEntry.criticalPids) manifestEntry.criticalPids = {};
+        manifestEntry.criticalPids[pid] = publicPath;
+      }
+    }
+  }
+
+  _resolveSlugs(siteIdentifier, pids) {
+    try {
+      const command = `php vendor/bin/typo3 vite_critical:get-slugs --site ${siteIdentifier} --pids ${pids.join(",")}`;
+      const output = execSync(command).toString();
+      return JSON.parse(output);
+    } catch (e) {
+      console.error(`❌ Error resolving slugs for ${siteIdentifier}:`, e.message);
+      return {};
+    }
+  }
+
+  async _generateForUrl(url, manifestEntry, settings) {
+    const browserArgs = this.config.PUPPETEER_ARGS || ["--no-sandbox"];
+    let browser = null;
 
     try {
-      // Load original CSS files
-      let combinedOriginalCss = "";
-      for (const cssFile of cssFiles) {
-        if (fs.existsSync(cssFile)) {
-          console.log(`🔗 Adding original CSS file: ${cssFile}`);
-          combinedOriginalCss += fs.readFileSync(cssFile, "utf-8") + "\n";
-        } else {
-          console.warn(`⚠️ CSS file not found: ${cssFile}`);
-        }
+      const cssFiles = (manifestEntry.css || []).map(f => path.join(this.absoluteViteOutputPath, f));
+      if (manifestEntry.file && manifestEntry.file.endsWith(".css")) {
+        cssFiles.push(path.join(this.absoluteViteOutputPath, manifestEntry.file));
       }
 
-      // Process with PostCSS
-      console.log("🧹 Removing Critical CSS from Deferred CSS with PostCSS...");
-      const criticalAst = postcss.parse(criticalCss);
-      const originalAst = postcss.parse(combinedOriginalCss);
+      if (cssFiles.length === 0) {
+          console.warn(`⚠️ No CSS files found in manifest for ${manifestEntry.name}`);
+          return null;
+      }
 
-      // Remove Critical CSS rules from the original CSS
-      criticalAst.walkRules(rule => {
-        originalAst.walkRules(origRule => {
-          if (origRule.selector === rule.selector) {
-            //console.log(`❌ Removing selector from deferred: ${rule.selector}`);
-            origRule.remove();
-          }
-        });
+      const cssString = cssFiles.map(f => fs.readFileSync(f, "utf8")).join("\n");
+
+      // Launch the browser explicitly using the direct puppeteer dependency
+      browser = await puppeteer.launch({
+        executablePath: "/usr/bin/chromium",
+        args: browserArgs
       });
 
-      // Remove empty selectors, media queries, and @supports blocks
-      originalAst.walkRules(rule => {
-        if (!rule.nodes || rule.nodes.length === 0) {
-          console.log(`🗑 Removing empty rule: ${rule.selector}`);
-          rule.remove();
+      // 1. Create a new page to check the status code
+      const page = await browser.newPage();
+
+      // Navigate to the URL
+      const response = await page.goto(url, {
+        waitUntil: 'networkidle2',
+        timeout: parseInt(settings.timeout, 10)
+      });
+
+      const statusCode = response.status();
+
+      // 2. Check: Only status 200 is allowed
+      if (statusCode !== 200) {
+        console.error(`❌ Error: Page returned status ${statusCode} for ${url}. Skipping generation.`);
+        await page.close();
+        return null;
+      }
+
+      await page.close();
+
+      const options = {
+        url,
+        cssString,
+        width: parseInt(settings.width, 10),
+        height: parseInt(settings.height, 10),
+        forceInclude: settings.forceInclude,
+        blockJSRequests: settings.blockJSRequests,
+        renderWaitTime: parseInt(settings.renderWaitTime, 10),
+        timeout: parseInt(settings.timeout, 10),
+        // Pass the existing browser instance to penthouse
+        puppeteer: {
+          getBrowser: () => browser
         }
-      });
+      };
 
-      originalAst.walkAtRules(atRule => {
-        if (["media", "supports"].includes(atRule.name) && (!atRule.nodes || atRule.nodes.length === 0)) {
-          console.log(`🗑 Removing empty @${atRule.name} block: ${atRule.params}`);
-          atRule.remove();
-        }
-      });
+      let criticalCss = await penthouse(options);
 
-      // Convert back to CSS
-      const processedCss = await postcss([
-        cssnano({
-          preset: "default",
-        })
-      ]).process(originalAst.toString(), { parser: postcssSafeParser });
+      // Post-processing
+      criticalCss = await this._postProcessCss(criticalCss, settings, manifestEntry);
 
-      const deferredCss = processedCss.css;
-      console.log("📏 Deferred CSS length after minification:", deferredCss.length);
-
-      // Save the Deferred CSS file
-      const deferredCssFilename = `${this.sitename}_${this.template}-deferred-${this.fileHash}.css`;
-      const deferredCssPath = path.join(this.absoluteViteOutputPath, "assets", deferredCssFilename);
-
-      fs.writeFileSync(deferredCssPath, deferredCss);
-      console.log(`✅ Deferred CSS saved to ${deferredCssPath}`);
-
-      return deferredCssFilename;
-    } catch (error) {
-      console.error("❌ Error generating Deferred CSS:", error);
+      return criticalCss;
+    } catch (e) {
+      console.error(`❌ Penthouse error for ${url}:`, e.message);
       return null;
+    } finally {
+      // Ensure the browser is closed after generation
+      if (browser) {
+        await browser.close();
+      }
     }
   }
 
-  /**
-   * Save the generated Critical CSS
-   */
-  _saveCriticalCss(criticalCss) {
-    const outputPath = path.join(this.absoluteViteOutputPath, 'assets', `${this.sitename}_${this.template}-critical-${this.fileHash}.css`);
-    fs.writeFileSync(outputPath, criticalCss);
-    console.log(`✅ Critical CSS saved to ${outputPath}`);
+  async _postProcessCss(css, settings, manifestEntry) {
+    // 1. Unwanted CSS
+    const processed = await postcss([
+      (root) => {
+        if (settings.propertiesRemove?.length) {
+          root.walkDecls(decl => { if (settings.propertiesRemove.includes(decl.prop)) decl.remove(); });
+        }
+        if (settings.selectorsRemove?.length) {
+          root.walkRules(rule => { if (settings.selectorsRemove.some(s => rule.selector.includes(s))) rule.remove(); });
+        }
+        if (this.config.REMOVE_IMPORTANT) {
+          root.walkDecls(decl => { decl.important = false; });
+        }
+        // Remove empty rules
+        root.walkRules(rule => { if (!rule.nodes?.length) rule.remove(); });
+        root.walkAtRules(at => { if (["media", "supports"].includes(at.name) && !at.nodes?.length) at.remove(); });
+      },
+      cssnano({ preset: "default" })
+    ]).process(css, { parser: postcssSafeParser });
+
+    let finalCss = processed.css;
+
+    // 2. Font Display
+    if (this.config.FORCE_FONT_DISPLAY !== false) {
+      finalCss = finalCss.replace(/(@font-face\s*{[^}]*?font-family:\s*[^;]+;[^}]*?src:[^}]+?)(;?\s*})/g, (m, b, a) =>
+        b.includes("font-display") ? m : b + "; font-display: swap;" + a
+      );
+    }
+
+    // 3. Fix Asset Paths
+    if (manifestEntry.assets?.length) {
+      finalCss = finalCss.replace(/url\((\.\/)?([^)"']+)\)/g, (match, dotSlash, assetFile) => {
+        const assetPath = manifestEntry.assets.find(a => a.endsWith(assetFile));
+        if (assetPath) {
+          return `url(${this.relativeViteOutputPath}/${assetPath})`.replace(/\/+/g, "/");
+        }
+        return match;
+      });
+    }
+
+    return finalCss;
   }
 }
 
-// Execute the script
+// Run
 (async () => {
   const generator = new CriticalCssGenerator();
-  await generator.generateCriticalCss();
+  await generator.run();
 })();

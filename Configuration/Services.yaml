@@ -7,3 +7,9 @@ services:
   Belsignum\ViteCritical\:
     resource: '../Classes/*'
     exclude: '../Classes/Domain/Model/*'
+
+  Belsignum\ViteCritical\Command\GetSlugsCommand:
+    tags:
+      - name: 'console.command'
+        command: 'vite_critical:get-slugs'
+        schedulable: false

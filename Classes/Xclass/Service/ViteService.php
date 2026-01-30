@@ -108,9 +108,10 @@ class ViteService extends \Praetorius\ViteAssetCollector\Service\ViteService
             if($this->isFrontend() && $this->isCriticalCssEnabledByConfig() && $this->hasCritical($entryPoint) && $this->requestIsPartOfConfig($entryPoint->name))
             {
                 // Add critical
+                $criticalFile = $this->getCriticalCss($entryPoint);
                 $this->assetCollector->addInlineStyleSheet(
                     "viteCritical:critical-{$entry}",
-                    file_get_contents($this->prepareAssetPath($outputDir . $entryPoint->critical, $assetOptions['external'])),
+                    file_get_contents($this->prepareAssetPath($outputDir . $criticalFile, $assetOptions['external'])),
                     [
                         'type' => 'text/css',
                         'data-type' => 'critical-css'
@@ -189,6 +190,12 @@ class ViteService extends \Praetorius\ViteAssetCollector\Service\ViteService
 
     private function isCriticalCssEnabledByConfig(): bool
     {
+        // 1. Prüfung auf Namespace-Parameter zur Deaktivierung (für Penthouse-Lauf)
+        $queryParams = $this->request->getQueryParams();
+        if (isset($queryParams['tx_vitecritical_css']['omit']) && (int)$queryParams['tx_vitecritical_css']['omit'] === 1) {
+            return false; // Verhindert das Inlining des (evtl. veralteten) Critical CSS
+        }
+
         $viteCriticalCssConfig = $this->configuration['viteCritical']['criticalCss'] ?? [];
         if ($viteCriticalCssConfig['enable'] ?? false)
         {
@@ -236,11 +243,30 @@ class ViteService extends \Praetorius\ViteAssetCollector\Service\ViteService
 
     private function hasCritical(ViteManifestItem $entry): bool
     {
-        return $entry->critical !== '';
+        if ($entry->critical !== '') {
+            return true;
+        }
+
+        if (!empty($entry->criticalPids)) {
+            /** @var TypoScriptFrontendController $frontendController */
+            $frontendController = $this->request->getAttribute('frontend.controller');
+            $pid = (string)$frontendController->id;
+            return isset($entry->criticalPids[$pid]);
+        }
+
+        return false;
     }
 
     private function getCriticalCss(ViteManifestItem $entry): string
     {
+        /** @var TypoScriptFrontendController $frontendController */
+        $frontendController = $this->request->getAttribute('frontend.controller');
+        $pid = (string)$frontendController->id;
+
+        if (isset($entry->criticalPids[$pid])) {
+            return $entry->criticalPids[$pid];
+        }
+
         return $entry->critical;
     }
 
