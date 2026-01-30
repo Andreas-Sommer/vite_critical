@@ -23,7 +23,7 @@ $GLOBALS['TYPO3_CONF_VARS']['FE']['cacheHash']['excludedParameters'][] = 'tx_vit
 \TYPO3\CMS\Core\Utility\ExtensionManagementUtility::addTypoScript(
     'vite_critical',
     'setup',
-    '[request.getQueryParams()[\'tx_vitecritical_css\'][\'omit\'] == 1]
+    '[request.getQueryParams()[\'tx_vitecritical_css\'] && request.getQueryParams()[\'tx_vitecritical_css\'][\'omit\'] == 1]
         config.no_cache = 1
     [END]'
 );

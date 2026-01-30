@@ -192,7 +192,7 @@ class ViteService extends \Praetorius\ViteAssetCollector\Service\ViteService
     {
         // 1. Prüfung auf Namespace-Parameter zur Deaktivierung (für Penthouse-Lauf)
         $queryParams = $this->request->getQueryParams();
-        if (isset($queryParams['tx_vitecritical_css']['omit']) && (int)$queryParams['tx_vitecritical_css']['omit'] === 1) {
+        if (isset($queryParams['tx_vitecritical_css']) && is_array($queryParams['tx_vitecritical_css']) && (int)($queryParams['tx_vitecritical_css']['omit'] ?? 0) === 1) {
             return false; // Verhindert das Inlining des (evtl. veralteten) Critical CSS
         }
 
