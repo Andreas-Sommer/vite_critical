@@ -265,7 +265,7 @@ class CriticalCssGenerator {
         root.walkAtRules(at => { if (["media", "supports"].includes(at.name) && !at.nodes?.length) at.remove(); });
       },
       cssnano({ preset: "default" })
-    ]).process(css, { parser: postcssSafeParser });
+    ]).process(css, { parser: postcssSafeParser, from: undefined });
 
     let finalCss = processed.css;
 
