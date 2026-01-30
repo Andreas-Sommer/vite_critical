@@ -229,14 +229,33 @@ class ViteService extends \Praetorius\ViteAssetCollector\Service\ViteService
 
     private function requestIsPartOfConfig(?string $name): bool
     {
-        // Check entryPoint is set for current page ID
         $entryPointForPid = $this->viteCriticalCssConfig['entryPointForPid'] ?? [];
-        if(empty($entryPointForPid) === false && $name !== null && isset($entryPointForPid[$name]))
-        {
-            $pids = GeneralUtility::intExplode(',', $entryPointForPid[$name], true);
+        if (empty($entryPointForPid) || $name === null) {
+            return false;
+        }
+
+        /** @var \TYPO3\CMS\Core\Site\Entity\Site $site */
+        $site = $this->request->getAttribute('site');
+        $siteIdentifier = $site ? $site->getIdentifier() : '';
+
+        $targetKey = null;
+
+        // Abgleich des technischen Namens mit den Config-Keys
+        foreach (array_keys($entryPointForPid) as $configKey) {
+            // Erzeuge den erwarteten technischen Namen: {site}_{template}_css
+            $expectedName = sprintf('%s_%s_css', $siteIdentifier, $configKey);
+
+            if ($name === $expectedName) {
+                $targetKey = (string)$configKey;
+                break;
+            }
+        }
+
+        if ($targetKey !== null) {
+            $pids = GeneralUtility::intExplode(',', $entryPointForPid[$targetKey], true);
             /** @var TypoScriptFrontendController $frontendController */
             $frontendController = $this->request->getAttribute('frontend.controller');
-            return in_array($frontendController->id, $pids, true) || in_array($frontendController->contentPid, $pids, true);;
+            return in_array($frontendController->id, $pids, true) || in_array($frontendController->contentPid, $pids, true);
         }
         return false;
     }
