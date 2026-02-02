@@ -286,11 +286,23 @@ class CriticalCssGenerator {
     }
 
     // 3. Fix Asset Paths
-    if (manifestEntry.assets?.length) {
+    if (manifestEntry.assets?.length || this.manifest) {
       finalCss = finalCss.replace(/url\((\.\/)?([^)"']+)\)/g, (match, dotSlash, assetFile) => {
-        const assetPath = manifestEntry.assets.find(a => a.endsWith(assetFile));
+        if (assetFile.startsWith('data:')) return match;
+
+        // Try to find the asset in manifestEntry.assets first
+        let assetPath = manifestEntry.assets?.find(a => a.endsWith(assetFile));
+
+        // If not found in current entry, search the whole manifest
+        if (!assetPath && this.manifest) {
+            const manifestAsset = Object.values(this.manifest).find(entry => entry.file === assetFile || entry.file?.endsWith(assetFile));
+            if (manifestAsset) {
+                assetPath = manifestAsset.file;
+            }
+        }
+
         if (assetPath) {
-          return `url(${this.relativeViteOutputPath}/${assetPath})`.replace(/\/+/g, "/");
+          return `url(/${this.relativeViteOutputPath}/${assetPath})`.replace(/\/+/g, "/");
         }
         return match;
       });
