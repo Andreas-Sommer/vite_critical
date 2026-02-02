@@ -47,7 +47,7 @@ Die Generierung erfolgt über ein Node.js Skript, das idealerweise als `postbuil
 3.  Ein TYPO3-Command (`vite_critical:get-slugs`) löst die PIDs in echte Slugs auf.
 4.  Puppeteer ruft die Seite mit `?tx_vitecritical_css[omit]=1` auf (deaktiviert bestehendes Critical CSS).
 5.  Penthouse extrahiert das CSS, PostCSS optimiert es.
-6.  Das Vite-Manifest (`manifest.json`) wird um das Feld `criticalPids` erweitert.
+6.  Das Vite-Manifest (`manifest.json`) wird um das Feld `criticalByPid` erweitert.
 
 ## Technische Details & Best Practices
 *   **Frontend-Injektion:** Der `ViteService` (Xclass) injiziert das CSS inline in den `<head>`. Alle anderen Stylesheets werden automatisch auf `rel="preload"` umgestellt.
