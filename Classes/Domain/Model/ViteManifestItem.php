@@ -20,7 +20,7 @@ final class ViteManifestItem
         public readonly array $dynamicImports,
         public readonly ?string $name,
         public readonly string $critical,
-        public readonly array $criticalPids,
+        public readonly array $criticalByPid,
         public readonly string $deferred
     ) {}
 
@@ -38,7 +38,7 @@ final class ViteManifestItem
             (array)($item['dynamicImports'] ?? []),
             $item['name'] ?? null,
             $item['critical'] ?? '',
-            (array)($item['criticalPids'] ?? []),
+            (array)($item['criticalByPid'] ?? []),
             $item['deferred'] ?? ''
         );
     }

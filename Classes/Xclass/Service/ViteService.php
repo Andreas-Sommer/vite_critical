@@ -266,11 +266,11 @@ class ViteService extends \Praetorius\ViteAssetCollector\Service\ViteService
             return true;
         }
 
-        if (!empty($entry->criticalPids)) {
+        if (!empty($entry->criticalByPid)) {
             /** @var TypoScriptFrontendController $frontendController */
             $frontendController = $this->request->getAttribute('frontend.controller');
             $pid = (string)$frontendController->id;
-            return isset($entry->criticalPids[$pid]);
+            return isset($entry->criticalByPid[$pid]);
         }
 
         return false;
@@ -282,8 +282,8 @@ class ViteService extends \Praetorius\ViteAssetCollector\Service\ViteService
         $frontendController = $this->request->getAttribute('frontend.controller');
         $pid = (string)$frontendController->id;
 
-        if (isset($entry->criticalPids[$pid])) {
-            return $entry->criticalPids[$pid];
+        if (isset($entry->criticalByPid[$pid])) {
+            return $entry->criticalByPid[$pid];
         }
 
         return $entry->critical;

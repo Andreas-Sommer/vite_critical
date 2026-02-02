@@ -155,8 +155,8 @@ class CriticalCssGenerator {
         fs.writeFileSync(outputPath, criticalCss);
         console.log(`✅ Saved to ${outputPath}`);
 
-        if (!manifestEntry.criticalPids) manifestEntry.criticalPids = {};
-        manifestEntry.criticalPids[pid] = publicPath;
+        if (!manifestEntry.criticalByPid) manifestEntry.criticalByPid = {};
+        manifestEntry.criticalByPid[pid] = publicPath;
       }
     }
   }
