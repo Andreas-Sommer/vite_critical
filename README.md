@@ -51,6 +51,7 @@ Die Generierung erfolgt über ein Node.js Skript, das idealerweise als `postbuil
 
 ## Technische Details & Best Practices
 *   **Frontend-Injektion:** Der `ViteService` (Xclass) injiziert das CSS inline in den `<head>`. Alle anderen Stylesheets werden automatisch auf `rel="preload"` umgestellt.
+*   **Noscript-Fallback (TODO):** Die asynchron geladenen Stylesheets sind mit `data-noscript="true"` markiert. Damit diese auch bei deaktiviertem JavaScript geladen werden, muss noch ein PageRenderer-Hook implementiert werden, der diese Tags in `<noscript>` umhüllt.
 *   **Browser:** In der DDEV-Umgebung wird der systemeigene Chromium unter `/usr/bin/chromium` verwendet.
 *   **Cache:** Bei Verwendung des `omit`-Parameters wird die Seite via TypoScript (`config.no_cache = 1`) am Cache vorbeigeführt, um immer den aktuellen Stand der Stylesheets zu erhalten.
 *   **Fehlerbehandlung:** Das Skript prüft den HTTP-Statuscode der Seite. Nur bei `200 OK` wird ein Critical CSS generiert.

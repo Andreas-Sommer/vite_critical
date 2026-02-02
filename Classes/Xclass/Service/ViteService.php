@@ -105,13 +105,21 @@ class ViteService extends \Praetorius\ViteAssetCollector\Service\ViteService
 
         if ($addCss)
         {
-            if($this->isFrontend() && $this->isCriticalCssEnabledByConfig() && $this->hasCritical($entryPoint) && $this->requestIsPartOfConfig($entryPoint->name))
+            $isFrontend = $this->isFrontend();
+            $isCriticalCssEnabled = $this->isCriticalCssEnabledByConfig();
+            $hasCritical = $this->hasCritical($entryPoint);
+            $requestIsPartOfConfig = $this->requestIsPartOfConfig($entryPoint->name);
+
+            if($isFrontend && $isCriticalCssEnabled && $hasCritical && $requestIsPartOfConfig)
             {
                 // Add critical
                 $criticalFile = $this->getCriticalCss($entryPoint);
+
+                $absPath = $this->prepareAssetPath($outputDir . $criticalFile, $assetOptions['external']);
+                $content = file_get_contents($absPath);
                 $this->assetCollector->addInlineStyleSheet(
                     "viteCritical:critical-{$entry}",
-                    file_get_contents($this->prepareAssetPath($outputDir . $criticalFile, $assetOptions['external'])),
+                    $content,
                     [
                         'type' => 'text/css',
                         'data-type' => 'critical-css'
@@ -119,19 +127,32 @@ class ViteService extends \Praetorius\ViteAssetCollector\Service\ViteService
                     ['priority' => true]
                 );
 
+                $staleCssAttributes = [
+                    'rel' => 'preload',
+                    'as' => 'style',
+                    'onload' => "this.onload=null;this.rel='stylesheet';document.querySelector('style[data-type=\"critical-css\"]').type='stale/css';",
+                    'data-noscript' => 'true'
+                ];
+
+                if (!empty($entryPoint->file) && $entryPoint->isCss()) {
+                    $this->assetCollector->addStyleSheet(
+                        "vite:{$entry}:main",
+                        $this->prepareAssetPath($outputDir . $entryPoint->file, $assetOptions['external']),
+                        $staleCssAttributes,
+                        ['priority' => false]
+                    );
+                    // todo: add noscript wrap via PageRenderer hook or event (data-noscript="true")
+                }
+
                 foreach ($entryPoint->css as $file)
                 {
                     $this->assetCollector->addStyleSheet(
                         "vite:{$entry}:{$file}",
                         $this->prepareAssetPath($outputDir . $file, $assetOptions['external']),
-                        [
-                            'rel' => 'preload',
-                            'as' => 'style',
-                            'onload' => "this.onload=null;this.rel='stylesheet';document.querySelector('style[data-type=\"critical-css\"]').type='stale/css';"
-                        ],
+                        $staleCssAttributes,
                         ['priority' => false]
                     );
-                    // todo: add  noscript
+                    // todo: add noscript wrap via PageRenderer hook or event (data-noscript="true")
                 }
             }
             else
