@@ -147,10 +147,19 @@ class CriticalCssGenerator {
         const hashMatch = manifestEntry.file ? manifestEntry.file.match(/-(\w+)\.(css|js)$/) : null;
         const fileHash = hashMatch ? hashMatch[1] : "nohash";
 
+        // Extract the directory from the original file path to remain consistent with Vite's structure
+        const assetSubDir = manifestEntry.file ? path.dirname(manifestEntry.file) : 'assets';
+
         // Use consistent naming with hyphens as requested
         const fileName = `${siteIdentifier}-${template}-critical-pid${pid}-${fileHash}.css`.replace(/_/g, '-');
-        const outputPath = path.join(this.absoluteViteOutputPath, fileName);
-        const publicPath = path.join(this.relativeViteOutputPath, fileName);
+        const outputPath = path.join(this.absoluteViteOutputPath, assetSubDir, fileName);
+        const publicPath = path.join(this.relativeViteOutputPath, assetSubDir, fileName);
+
+        // Ensure directory exists
+        const dir = path.dirname(outputPath);
+        if (!fs.existsSync(dir)) {
+          fs.mkdirSync(dir, { recursive: true });
+        }
 
         fs.writeFileSync(outputPath, criticalCss);
         console.log(`✅ Saved to ${outputPath}`);
