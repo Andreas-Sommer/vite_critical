@@ -149,8 +149,8 @@ class CriticalCssGenerator {
 
         // Use consistent naming with hyphens as requested
         const fileName = `${siteIdentifier}-${template}-critical-pid${pid}-${fileHash}.css`.replace(/_/g, '-');
-        const outputPath = path.join(this.absoluteViteOutputPath, 'assets', fileName);
-        const publicPath = path.join(this.relativeViteOutputPath, 'assets', fileName);
+        const outputPath = path.join(this.absoluteViteOutputPath, fileName);
+        const publicPath = path.join(this.relativeViteOutputPath, fileName);
 
         fs.writeFileSync(outputPath, criticalCss);
         console.log(`✅ Saved to ${outputPath}`);
