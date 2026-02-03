@@ -139,7 +139,7 @@ class CriticalCssGenerator {
 
     for (const pid of pids) {
       const slug = slugs[pid] || "/";
-      const url = siteBaseUrl + slug + (siteBaseUrl.includes('?') || slug.includes('?') ? '&' : '?') + 'tx_vitecritical_css[omit]=1';
+      const url = siteBaseUrl + slug;
       console.log(`🚀 Generating Critical CSS for ${siteIdentifier} | Template: ${template} | PID: ${pid} | URL: ${url}`);
 
       const criticalCss = await this._generateForUrl(url, manifestEntry, settings);
