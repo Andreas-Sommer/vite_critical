@@ -19,8 +19,8 @@ use TYPO3\CMS\Frontend\Controller\TypoScriptFrontendController;
 class ViteService extends \Praetorius\ViteAssetCollector\Service\ViteService
 {
     private FrontendInterface $cache;
-    private readonly ServerRequest $request;
-    private readonly array $configuration;
+    private ServerRequest $request;
+    private array $configuration;
     private array $viteCriticalCssConfig;
 
     public function __construct(
@@ -33,22 +33,12 @@ class ViteService extends \Praetorius\ViteAssetCollector\Service\ViteService
         parent::__construct($cache, $assetCollector, $packageManager, $extensionConfiguration);
 
         $this->cache = $cache;
-        if ($this->isFrontend())
-        {
-            $this->request = $GLOBALS['TYPO3_REQUEST'];
-            $site = $this->request->getAttribute('site');
-            if($site)
-            {
-                $this->configuration = $site->getConfiguration();
-            }
-
-        }
     }
 
     private function isFrontend()
     {
-        return (($GLOBALS['TYPO3_REQUEST'] ?? null) instanceof ServerRequestInterface
-            && ApplicationType::fromRequest($GLOBALS['TYPO3_REQUEST'])->isFrontend());
+        return (($this->request ?? null) instanceof ServerRequestInterface
+            && ApplicationType::fromRequest($this->request)->isFrontend());
     }
 
     public function addAssetsFromManifest(
@@ -60,6 +50,16 @@ class ViteService extends \Praetorius\ViteAssetCollector\Service\ViteService
         array  $cssTagAttributes = []
     ): void
     {
+        $this->request = $GLOBALS['TYPO3_REQUEST'];
+        if ($this->isFrontend())
+        {
+            $site = $this->request->getAttribute('site');
+            if($site)
+            {
+                $this->configuration = $site->getConfiguration();
+            }
+        }
+
         $entry = $this->determineAssetIdentifierFromExtensionPath($entry);
 
         $manifestFile = $this->resolveManifestFile($manifestFile);
@@ -211,12 +211,6 @@ class ViteService extends \Praetorius\ViteAssetCollector\Service\ViteService
 
     private function isCriticalCssEnabledByConfig(): bool
     {
-        // 1. Prüfung auf Namespace-Parameter zur Deaktivierung (für Penthouse-Lauf)
-        $queryParams = $this->request->getQueryParams();
-        if (isset($queryParams['tx_vitecritical_css']) && is_array($queryParams['tx_vitecritical_css']) && (int)($queryParams['tx_vitecritical_css']['omit'] ?? 0) === 1) {
-            return false; // Verhindert das Inlining des (evtl. veralteten) Critical CSS
-        }
-
         $viteCriticalCssConfig = $this->configuration['viteCritical']['criticalCss'] ?? [];
         if ($viteCriticalCssConfig['enable'] ?? false)
         {
