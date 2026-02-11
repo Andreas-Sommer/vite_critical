@@ -11,7 +11,7 @@ Die `vite_critical` Extension ist ein leistungsstarkes Tool zur automatisierten 
 *   **Security:** Bypasst bestehendes Critical CSS während der Generierung via Query-Parameter, um Verfälschungen zu vermeiden.
 
 ## Konfiguration in TYPO3 (`config.yaml`)
-Die Steuerung erfolgt pro Site in der jeweiligen `config.yaml` (z.B. `config/sites/bob/config.yaml`).
+Die Steuerung erfolgt pro Site in der jeweiligen `config.yaml` (z.B. `config/sites/example/config.yaml`).
 
 ```yaml
 viteCritical:
@@ -19,8 +19,14 @@ viteCritical:
     enable: true
     # Mapping von Templates zu PIDs
     entryPointForPid:
-      default: '1'          # Template 'default' für PID 1
-      digitalnavy: '1056, 1059' # Template 'digitalnavy' für diese PIDs
+      default: '1'              # Template 'default' für PID 1
+      landingpage:
+        pids: '100, 101'        # Template 'landingpage' für diese PIDs
+        cssDelivery:
+          critical:             # Inline Critical CSS
+            media: '(max-width: 991.98px)'
+          stylesheet:           # Blocking Stylesheet (Desktop)
+            media: '(min-width: 992px)'
 
     # Optionale site-spezifische Einstellungen
     settings:
@@ -50,7 +56,7 @@ Die Generierung erfolgt über ein Node.js Skript, das idealerweise als `postbuil
 6.  Das Vite-Manifest (`manifest.json`) wird um das Feld `criticalByPid` erweitert.
 
 ## Technische Details & Best Practices
-*   **Frontend-Injektion:** Der `ViteService` (Xclass) injiziert das CSS inline in den `<head>`. Alle anderen Stylesheets werden automatisch auf `rel="preload"` umgestellt.
+*   **Frontend-Injektion:** Der `ViteService` (Xclass) injiziert das CSS inline in den `<head>`. `preloadSwap` erbt von `critical`, wenn nicht gesetzt. Optional kann zusätzlich ein blocking Stylesheet (z.B. Desktop) per `cssDelivery.stylesheet` geliefert werden.
 *   **Noscript-Fallback (TODO):** Die asynchron geladenen Stylesheets sind mit `data-noscript="true"` markiert. Damit diese auch bei deaktiviertem JavaScript geladen werden, muss noch ein PageRenderer-Hook implementiert werden, der diese Tags in `<noscript>` umhüllt.
 *   **Browser:** In der DDEV-Umgebung wird der systemeigene Chromium unter `/usr/bin/chromium` verwendet.
 *   **Cache:** Bei Verwendung des `omit`-Parameters wird die Seite via TypoScript (`config.no_cache = 1`) am Cache vorbeigeführt, um immer den aktuellen Stand der Stylesheets zu erhalten.
