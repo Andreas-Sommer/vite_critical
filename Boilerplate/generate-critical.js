@@ -113,8 +113,8 @@ class CriticalCssGenerator {
         timeout: siteSettings.timeout || this.config.TIMEOUT || 30000,
       };
 
-      for (const [template, pidsRaw] of Object.entries(entryPointForPid)) {
-        await this._processTemplate(siteIdentifier, template, pidsRaw, siteBaseUrl, activeSettings);
+      for (const [template, configEntry] of Object.entries(entryPointForPid)) {
+        await this._processTemplate(siteIdentifier, template, configEntry, siteBaseUrl, activeSettings);
       }
 
     } catch (e) {
@@ -122,7 +122,7 @@ class CriticalCssGenerator {
     }
   }
 
-  async _processTemplate(siteIdentifier, template, pidsRaw, siteBaseUrl, settings) {
+  async _processTemplate(siteIdentifier, template, configEntry, siteBaseUrl, settings) {
     const templateName = template.endsWith('_css') ? template : `${template}_css`;
     const searchName = `${siteIdentifier}_${templateName}`;
     const manifestEntry = Object.values(this.manifest).find(item => item.name === searchName);
@@ -132,7 +132,17 @@ class CriticalCssGenerator {
       return;
     }
 
-    const pids = String(pidsRaw).split(",").map(p => p.trim()).filter(Boolean);
+    let pidsRaw = configEntry;
+    if (configEntry && typeof configEntry === "object" && !Array.isArray(configEntry)) {
+      pidsRaw = configEntry.pids;
+    }
+
+    let pids = [];
+    if (Array.isArray(pidsRaw)) {
+      pids = pidsRaw.map(p => String(p).trim()).filter(Boolean);
+    } else {
+      pids = String(pidsRaw || "").split(",").map(p => p.trim()).filter(Boolean);
+    }
     if (pids.length === 0) return;
 
     const slugs = this._resolveSlugs(siteIdentifier, pids);
