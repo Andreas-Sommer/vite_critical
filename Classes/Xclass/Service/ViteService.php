@@ -121,9 +121,9 @@ class ViteService extends \Praetorius\ViteAssetCollector\Service\ViteService
                     'type' => 'text/css',
                     'data-type' => 'critical-css'
                 ];
-                $inlineTagAttributes = $this->getCriticalInlineTagAttributes($entryPoint->name);
-                if (!empty($inlineTagAttributes)) {
-                    $inlineAttributes = array_merge($inlineAttributes, $inlineTagAttributes);
+                $criticalTagAttributes = $this->getCriticalTagAttributes($entryPoint->name);
+                if (!empty($criticalTagAttributes)) {
+                    $inlineAttributes = array_merge($inlineAttributes, $criticalTagAttributes);
                 }
                 $this->assetCollector->addInlineStyleSheet(
                     "viteCritical:critical-{$entry}",
@@ -132,7 +132,7 @@ class ViteService extends \Praetorius\ViteAssetCollector\Service\ViteService
                     ['priority' => true]
                 );
 
-                $preloadSwapTagAttributes = $this->getCriticalPreloadSwapTagAttributes($entryPoint->name);
+                $preloadSwapTagAttributes = $this->getPreloadSwapTagAttributes($entryPoint->name);
                 $staleCssAttributes = [
                     'rel' => 'preload',
                     'as' => 'style',
@@ -143,7 +143,7 @@ class ViteService extends \Praetorius\ViteAssetCollector\Service\ViteService
                     $staleCssAttributes = array_merge($staleCssAttributes, $preloadSwapTagAttributes);
                 }
 
-                $stylesheetTagAttributes = $this->getCriticalStylesheetTagAttributes($entryPoint->name);
+                $stylesheetTagAttributes = $this->getStylesheetTagAttributes($entryPoint->name);
                 $blockingCssAttributes = [];
                 if (!empty($stylesheetTagAttributes)) {
                     $blockingCssAttributes = $this->prepareCssAttributes($cssTagAttributes);
@@ -154,6 +154,7 @@ class ViteService extends \Praetorius\ViteAssetCollector\Service\ViteService
                     );
                 }
 
+                $blockingFiles = [];
                 if (!empty($entryPoint->file) && $entryPoint->isCss()) {
                     $this->assetCollector->addStyleSheet(
                         "vite:{$entry}:main",
@@ -161,14 +162,10 @@ class ViteService extends \Praetorius\ViteAssetCollector\Service\ViteService
                         $staleCssAttributes,
                         ['priority' => false]
                     );
-                    if (!empty($blockingCssAttributes)) {
-                        $this->assetCollector->addStyleSheet(
-                            "vite:{$entry}:main:stylesheet",
-                            $this->prepareAssetPath($outputDir . $entryPoint->file, $assetOptions['external']),
-                            $blockingCssAttributes,
-                            ['priority' => false]
-                        );
-                    }
+                    $blockingFiles[] = [
+                        "vite:{$entry}:main:stylesheet",
+                        $outputDir . $entryPoint->file
+                    ];
                     // todo: add noscript wrap via PageRenderer hook or event (data-noscript="true")
                 }
 
@@ -180,15 +177,22 @@ class ViteService extends \Praetorius\ViteAssetCollector\Service\ViteService
                         $staleCssAttributes,
                         ['priority' => false]
                     );
-                    if (!empty($blockingCssAttributes)) {
+                    $blockingFiles[] = [
+                        "vite:{$entry}:{$file}:stylesheet",
+                        $outputDir . $file
+                    ];
+                    // todo: add noscript wrap via PageRenderer hook or event (data-noscript="true")
+                }
+
+                if (!empty($blockingCssAttributes)) {
+                    foreach ($blockingFiles as [$identifier, $filePath]) {
                         $this->assetCollector->addStyleSheet(
-                            "vite:{$entry}:{$file}:stylesheet",
-                            $this->prepareAssetPath($outputDir . $file, $assetOptions['external']),
+                            $identifier,
+                            $this->prepareAssetPath($filePath, $assetOptions['external']),
                             $blockingCssAttributes,
                             ['priority' => false]
                         );
                     }
-                    // todo: add noscript wrap via PageRenderer hook or event (data-noscript="true")
                 }
             }
             else
@@ -295,34 +299,43 @@ class ViteService extends \Praetorius\ViteAssetCollector\Service\ViteService
         return in_array($frontendController->id, $pids, true) || in_array($frontendController->contentPid, $pids, true);
     }
 
-    private function getCriticalInlineTagAttributes(?string $name): array
+    private function getCriticalTagAttributes(?string $name): array
     {
-        return $this->getCriticalTagAttributesFromConfig(
+        return $this->getTagAttributesFromConfig(
             $name,
-            'inline',
+            'critical',
             ['type', 'data-type']
         );
     }
 
-    private function getCriticalPreloadSwapTagAttributes(?string $name): array
+    private function getPreloadSwapTagAttributes(?string $name): array
     {
-        return $this->getCriticalTagAttributesFromConfig(
+        $attributes = $this->getTagAttributesFromConfig(
             $name,
             'preloadSwap',
             ['rel', 'as', 'onload', 'data-noscript']
         );
+        if (!empty($attributes)) {
+            return $attributes;
+        }
+
+        return $this->getTagAttributesFromConfig(
+            $name,
+            'critical',
+            ['rel', 'as', 'onload', 'data-noscript', 'type', 'data-type']
+        );
     }
 
-    private function getCriticalStylesheetTagAttributes(?string $name): array
+    private function getStylesheetTagAttributes(?string $name): array
     {
-        return $this->getCriticalTagAttributesFromConfig(
+        return $this->getTagAttributesFromConfig(
             $name,
             'stylesheet',
             ['rel']
         );
     }
 
-    private function getCriticalTagAttributesFromConfig(
+    private function getTagAttributesFromConfig(
         ?string $name,
         string $tagKey,
         array $reservedKeys
@@ -333,7 +346,7 @@ class ViteService extends \Praetorius\ViteAssetCollector\Service\ViteService
             return [];
         }
 
-        $tagConfig = $config['criticalTags'] ?? [];
+        $tagConfig = $config['cssDelivery'] ?? [];
         if (!is_array($tagConfig) || empty($tagConfig)) {
             return [];
         }
