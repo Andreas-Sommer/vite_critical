@@ -117,13 +117,18 @@ class ViteService extends \Praetorius\ViteAssetCollector\Service\ViteService
 
                 $absPath = $this->prepareAssetPath($outputDir . $criticalFile, $assetOptions['external']);
                 $content = file_get_contents($absPath);
+                $inlineAttributes = [
+                    'type' => 'text/css',
+                    'data-type' => 'critical-css'
+                ];
+                $additionalAttributes = $this->getCriticalAdditionalAttributes($entryPoint->name);
+                if (!empty($additionalAttributes)) {
+                    $inlineAttributes = array_merge($inlineAttributes, $additionalAttributes);
+                }
                 $this->assetCollector->addInlineStyleSheet(
                     "viteCritical:critical-{$entry}",
                     $content,
-                    [
-                        'type' => 'text/css',
-                        'data-type' => 'critical-css'
-                    ],
+                    $inlineAttributes,
                     ['priority' => true]
                 );
 
@@ -244,35 +249,84 @@ class ViteService extends \Praetorius\ViteAssetCollector\Service\ViteService
 
     private function requestIsPartOfConfig(?string $name): bool
     {
+        $config = $this->getCriticalConfigForEntryPoint($name);
+        if ($config === null) {
+            return false;
+        }
+
+        $pids = $this->getCriticalPidsFromConfig($config);
+        if (empty($pids)) {
+            return false;
+        }
+
+        /** @var TypoScriptFrontendController $frontendController */
+        $frontendController = $this->request->getAttribute('frontend.controller');
+        return in_array($frontendController->id, $pids, true) || in_array($frontendController->contentPid, $pids, true);
+    }
+
+    private function getCriticalAdditionalAttributes(?string $name): array
+    {
+        $config = $this->getCriticalConfigForEntryPoint($name);
+        if ($config === null) {
+            return [];
+        }
+
+        $additionalAttributes = $config['additionalAttributes'] ?? [];
+        if (!is_array($additionalAttributes) || empty($additionalAttributes)) {
+            return [];
+        }
+
+        $filtered = [];
+        foreach ($additionalAttributes as $key => $value) {
+            if (!is_string($key) || $key === '' || !is_string($value) || $value === '') {
+                continue;
+            }
+            if ($key === 'type' || $key === 'data-type') {
+                continue;
+            }
+            $filtered[$key] = $value;
+        }
+
+        return $filtered;
+    }
+
+    private function getCriticalPidsFromConfig(array $config): array
+    {
+        $pids = $config['pids'] ?? '';
+        if (is_string($pids)) {
+            return GeneralUtility::intExplode(',', $pids, true);
+        }
+        if (is_array($pids)) {
+            $pids = array_map('intval', $pids);
+            return array_values(array_filter($pids, static fn (int $pid): bool => $pid > 0));
+        }
+
+        return [];
+    }
+
+    private function getCriticalConfigForEntryPoint(?string $name): ?array
+    {
         $entryPointForPid = $this->viteCriticalCssConfig['entryPointForPid'] ?? [];
         if (empty($entryPointForPid) || $name === null) {
-            return false;
+            return null;
         }
 
         /** @var \TYPO3\CMS\Core\Site\Entity\Site $site */
         $site = $this->request->getAttribute('site');
         $siteIdentifier = $site ? $site->getIdentifier() : '';
 
-        $targetKey = null;
-
-        // Abgleich des technischen Namens mit den Config-Keys
         foreach (array_keys($entryPointForPid) as $configKey) {
-            // Erzeuge den erwarteten technischen Namen: {site}_{template}_css
             $expectedName = sprintf('%s_%s_css', $siteIdentifier, $configKey);
-
             if ($name === $expectedName) {
-                $targetKey = (string)$configKey;
-                break;
+                $configEntry = $entryPointForPid[$configKey];
+                if (is_array($configEntry)) {
+                    return $configEntry;
+                }
+                return ['pids' => $configEntry];
             }
         }
 
-        if ($targetKey !== null) {
-            $pids = GeneralUtility::intExplode(',', $entryPointForPid[$targetKey], true);
-            /** @var TypoScriptFrontendController $frontendController */
-            $frontendController = $this->request->getAttribute('frontend.controller');
-            return in_array($frontendController->id, $pids, true) || in_array($frontendController->contentPid, $pids, true);
-        }
-        return false;
+        return null;
     }
 
     private function hasCritical(ViteManifestItem $entry): bool
