@@ -121,9 +121,9 @@ class ViteService extends \Praetorius\ViteAssetCollector\Service\ViteService
                     'type' => 'text/css',
                     'data-type' => 'critical-css'
                 ];
-                $additionalAttributes = $this->getCriticalAdditionalAttributes($entryPoint->name);
-                if (!empty($additionalAttributes)) {
-                    $inlineAttributes = array_merge($inlineAttributes, $additionalAttributes);
+                $inlineTagAttributes = $this->getCriticalInlineTagAttributes($entryPoint->name);
+                if (!empty($inlineTagAttributes)) {
+                    $inlineAttributes = array_merge($inlineAttributes, $inlineTagAttributes);
                 }
                 $this->assetCollector->addInlineStyleSheet(
                     "viteCritical:critical-{$entry}",
@@ -132,12 +132,27 @@ class ViteService extends \Praetorius\ViteAssetCollector\Service\ViteService
                     ['priority' => true]
                 );
 
+                $preloadSwapTagAttributes = $this->getCriticalPreloadSwapTagAttributes($entryPoint->name);
                 $staleCssAttributes = [
                     'rel' => 'preload',
                     'as' => 'style',
                     'onload' => "this.onload=null;this.rel='stylesheet';document.querySelector('style[data-type=\"critical-css\"]').type='stale/css';",
                     'data-noscript' => 'true'
                 ];
+                if (!empty($preloadSwapTagAttributes)) {
+                    $staleCssAttributes = array_merge($staleCssAttributes, $preloadSwapTagAttributes);
+                }
+
+                $stylesheetTagAttributes = $this->getCriticalStylesheetTagAttributes($entryPoint->name);
+                $blockingCssAttributes = [];
+                if (!empty($stylesheetTagAttributes)) {
+                    $blockingCssAttributes = $this->prepareCssAttributes($cssTagAttributes);
+                    $blockingCssAttributes = array_merge(
+                        $blockingCssAttributes,
+                        ['rel' => 'stylesheet'],
+                        $stylesheetTagAttributes
+                    );
+                }
 
                 if (!empty($entryPoint->file) && $entryPoint->isCss()) {
                     $this->assetCollector->addStyleSheet(
@@ -146,6 +161,14 @@ class ViteService extends \Praetorius\ViteAssetCollector\Service\ViteService
                         $staleCssAttributes,
                         ['priority' => false]
                     );
+                    if (!empty($blockingCssAttributes)) {
+                        $this->assetCollector->addStyleSheet(
+                            "vite:{$entry}:main:stylesheet",
+                            $this->prepareAssetPath($outputDir . $entryPoint->file, $assetOptions['external']),
+                            $blockingCssAttributes,
+                            ['priority' => false]
+                        );
+                    }
                     // todo: add noscript wrap via PageRenderer hook or event (data-noscript="true")
                 }
 
@@ -157,6 +180,14 @@ class ViteService extends \Praetorius\ViteAssetCollector\Service\ViteService
                         $staleCssAttributes,
                         ['priority' => false]
                     );
+                    if (!empty($blockingCssAttributes)) {
+                        $this->assetCollector->addStyleSheet(
+                            "vite:{$entry}:{$file}:stylesheet",
+                            $this->prepareAssetPath($outputDir . $file, $assetOptions['external']),
+                            $blockingCssAttributes,
+                            ['priority' => false]
+                        );
+                    }
                     // todo: add noscript wrap via PageRenderer hook or event (data-noscript="true")
                 }
             }
@@ -264,14 +295,50 @@ class ViteService extends \Praetorius\ViteAssetCollector\Service\ViteService
         return in_array($frontendController->id, $pids, true) || in_array($frontendController->contentPid, $pids, true);
     }
 
-    private function getCriticalAdditionalAttributes(?string $name): array
+    private function getCriticalInlineTagAttributes(?string $name): array
+    {
+        return $this->getCriticalTagAttributesFromConfig(
+            $name,
+            'inline',
+            ['type', 'data-type']
+        );
+    }
+
+    private function getCriticalPreloadSwapTagAttributes(?string $name): array
+    {
+        return $this->getCriticalTagAttributesFromConfig(
+            $name,
+            'preloadSwap',
+            ['rel', 'as', 'onload', 'data-noscript']
+        );
+    }
+
+    private function getCriticalStylesheetTagAttributes(?string $name): array
+    {
+        return $this->getCriticalTagAttributesFromConfig(
+            $name,
+            'stylesheet',
+            ['rel']
+        );
+    }
+
+    private function getCriticalTagAttributesFromConfig(
+        ?string $name,
+        string $tagKey,
+        array $reservedKeys
+    ): array
     {
         $config = $this->getCriticalConfigForEntryPoint($name);
         if ($config === null) {
             return [];
         }
 
-        $additionalAttributes = $config['additionalAttributes'] ?? [];
+        $tagConfig = $config['criticalTags'] ?? [];
+        if (!is_array($tagConfig) || empty($tagConfig)) {
+            return [];
+        }
+
+        $additionalAttributes = $tagConfig[$tagKey] ?? [];
         if (!is_array($additionalAttributes) || empty($additionalAttributes)) {
             return [];
         }
@@ -281,7 +348,7 @@ class ViteService extends \Praetorius\ViteAssetCollector\Service\ViteService
             if (!is_string($key) || $key === '' || !is_string($value) || $value === '') {
                 continue;
             }
-            if ($key === 'type' || $key === 'data-type') {
+            if (in_array($key, $reservedKeys, true)) {
                 continue;
             }
             $filtered[$key] = $value;
